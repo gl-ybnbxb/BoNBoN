@@ -124,12 +124,14 @@ if __name__ == '__main__':
     prompts = df['Prompt'].tolist()
 
     # the sequence of n for best of n
+    args.n_seq = [int(num) for num in args.n_seq.split(',')]
 
     
     # load the reference model and its tokenizer
-    checkpoint = torch.load(args.ref_weight_dir)
     ref_model = AutoModelForCausalLM.from_pretrained(args.ref_model_dir)
-    ref_model.load_state_dict(checkpoint['state'])
+    if args.ref_weight_dir:
+        checkpoint = torch.load(args.ref_weight_dir)
+        ref_model.load_state_dict(checkpoint['state'])
 
     tokenizer = AutoTokenizer.from_pretrained(args.ref_model_dir, padding=True, padding_side='left')
     tokenizer.pad_token = tokenizer.eos_token
