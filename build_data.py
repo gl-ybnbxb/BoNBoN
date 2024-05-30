@@ -29,9 +29,9 @@ def build_dataloader(queries, tokenizer, batch_size=4, sampler='sequential'):
 
 
 # best and worst sampler
-def best_and_worst_of_n_sampler(query_list, batch_size, max_len, 
+def best_and_worst_of_n_sampler(query_list: List, batch_size: int, max_len: int, 
                                 model, tokenizer, rw_model, rw_tokenizer, device,
-                                gen_kwargs, n_seq = [3,6,8], responses_best_and_worst=None):
+                                gen_kwargs, n_seq: List, responses_best_and_worst=None):
     '''This is the function to sample the best and wrost sample'''
     # build the data loader
     dataloader = build_dataloader(query_list, tokenizer, batch_size=batch_size)
