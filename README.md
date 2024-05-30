@@ -43,7 +43,7 @@ One python file example to build the data is [here](https://github.com/gl-ybnbxb
 
 ## Training Scripts
 
-We are following the same training steps described in the original [DPO code](https://github.com/eric-mitchell/direct-preference-optimization/tree/main).
+We are following the same training steps described in the original [DPO code repository](https://github.com/eric-mitchell/direct-preference-optimization/tree/main).
 
 Step 1: Running SFT
 
@@ -51,11 +51,11 @@ Run SFT for Pythia 2.8B on Anthropic-HH data with batch size 64:
 ```
 python -u train.py model=pythia28 datasets=[hh] loss=sft exp_name=sft_pythia28_AntrophicHH gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16
 ```
-For TL;DR run the same command replacing datasets=[hh] with datasets=[tldr].
+For TL;DR run the same command replacing `datasets=[hh]` with `datasets=[tldr]`.
 
 Step 2: Running DPO / IPO / BoNBoN
 
-There are three types of losses implemented: dpo, ipo, and combined (BoNBoN) loss. For running BoNBoN, please make sure to specify `loss=combined` and `loss.alpha=alpha_value` as in the example below:
+There are three types of losses implemented: `dpo`, `ipo`, and `combined` (BoNBoN) loss.
 
 * Running DPO
 
@@ -63,7 +63,11 @@ There are three types of losses implemented: dpo, ipo, and combined (BoNBoN) los
 python -u train.py model=pythia28 datasets=[hh] loss=dpo loss.beta=0.1 exp_name=anthropic_dpo_pythia28 gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16 model.archive=/path/to/sft/LATEST/policy.pt
 ```
 
+For running IPO it suffices to change `loss=ipo`.
+
 * Running BoNBoN on best-of-n data:
+
+Inside `preference_datasets.py` please ensure that the get_hh_subset function is loading the best-of-n data, then train BoNBoN (please make sure to specify `loss=combined`, `loss.beta=beta_value` and `loss.alpha=alpha_value`) as shown in the commnand below:  
 
 ```
 python -u train.py model=pythia28 datasets=[hh_subset] loss=combined loss.beta=0.0275482094 loss.alpha=0.005 exp_name=anthropic_dpo_pythia28 gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16 model.archive=/path/to/sft/LATEST/policy.pt
