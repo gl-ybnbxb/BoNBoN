@@ -67,7 +67,7 @@ For running IPO it suffices to change `loss=ipo`.
 
 * Running BoNBoN on best-of-n data:
 
-Inside `preference_datasets.py` please ensure that the get_hh_subset function is loading the best-of-n data, then train BoNBoN (please make sure to specify `loss=combined`, `loss.beta=beta_value` and `loss.alpha=alpha_value`) as shown in the commnand below:  
+Inside `preference_datasets.py` please ensure that the `get_hh_subset` function is loading the best-of-n data, then train BoNBoN as shown in the command below (please make sure to specify `loss=combined`, `loss.beta=beta_value` and `loss.alpha=alpha_value`):  
 
 ```
 python -u train.py model=pythia28 datasets=[hh_subset] loss=combined loss.beta=0.0275482094 loss.alpha=0.005 exp_name=anthropic_dpo_pythia28 gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16 model.archive=/path/to/sft/LATEST/policy.pt
