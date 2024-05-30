@@ -34,3 +34,8 @@ Also, follow the [official guideline](https://pytorch.org/get-started/locally/) 
 One example is [here](https://github.com/gl-ybnbxb/BoNBoN). Also see `build_data_main.py` for a python file example.
 
 ## Training Scirpts
+
+
+## Evaluations
+
+See [metrics/kl_from_samples.py](https://github.com/gl-ybnbxb/BoNBoN) and [metrics/eval_reward_model.py](https://github.com/gl-ybnbxb/BoNBoN) for KL divergence and win rate computations.
