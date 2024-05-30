@@ -39,7 +39,7 @@ Also, follow the [official guideline](https://pytorch.org/get-started/locally/) 
 
 ### Usage
 
-One example is [here](https://github.com/gl-ybnbxb/BoNBoN/blob/main/build_data/build_data_example.ipynb). Also see `build_data_main.py` for a python file example.
+One python file example to build the data is [here](https://github.com/gl-ybnbxb/BoNBoN/blob/main/build_data/build_data_main.py).
 
 ## Training Scirpts
 
