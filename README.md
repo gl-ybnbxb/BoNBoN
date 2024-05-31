@@ -51,11 +51,10 @@ Run SFT for Pythia 2.8B on Anthropic-HH data with batch size 64:
 ```
 python -u train.py model=pythia28 datasets=[hh] loss=sft exp_name=sft_pythia28_AntrophicHH gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16
 ```
-For TL;DR run the same command replacing `datasets=[hh]` with `datasets=[tldr]`.
 
 Step 2: Running DPO / IPO / BoNBoN
 
-There are three types of losses implemented: `dpo`, `ipo`, and `combined` (BoNBoN) loss.
+There are three types of losses implemented: `dpo`, `ipo`, and `bonbon` loss.
 
 * Running DPO
 
@@ -67,10 +66,12 @@ For running IPO please change the loss in the command above to `loss=ipo`.
 
 * Running BoNBoN on best-of-n data:
 
-Inside `preference_datasets.py` please ensure that the `get_hh_subset` function is loading the best-of-n data, then train BoNBoN as shown in the command below (please make sure to specify `loss=combined`, `loss.beta=beta_value` and `loss.alpha=alpha_value`):  
+Inside `preference_datasets.py` the `get_best_worst` function loads the best-and-worst-of-n data. Please make sure to change line 195 in this file to point to the location of your best-and-worst-of-n data.
+
+For training BoNBoN please make sure to specify `loss=bonbon`, `loss.beta=beta_value` and `loss.alpha=alpha_value` as in the command below:  
 
 ```
-python -u train.py model=pythia28 datasets=[hh_subset] loss=combined loss.beta=0.0275482094 loss.alpha=0.005 exp_name=anthropic_dpo_pythia28 gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16 model.archive=/path/to/sft/LATEST/policy.pt
+python -u train.py model=pythia28 datasets=[hh_subset] loss=bonbon loss.beta=0.0275482094 loss.alpha=0.005 exp_name=anthropic_dpo_pythia28 gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16 model.archive=/path/to/sft/LATEST/policy.pt
 ```
 
 We run each model for 20k steps, then sample and evaluate from the trained model.

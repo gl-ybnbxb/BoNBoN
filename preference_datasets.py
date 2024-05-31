@@ -16,23 +16,6 @@ import dill
 
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 
-"""
-NUM_OF_GPUS = torch.cuda.device_count()
-device = 'cuda' if torch.cuda.is_available() else "cpu"
-print(device)
-
-# the reward model
-reward_model_name = "OpenAssistant/reward-model-deberta-v3-large-v2"
-#reward_model_name = '/net/scratch/dpo/reward-model'
-reward_model, reward_tokenizer = AutoModelForSequenceClassification.from_pretrained(reward_model_name), AutoTokenizer.from_pretrained(reward_model_name, padding_side='right')
-
-# Move all the models to gpus
-if NUM_OF_GPUS > 1:
-    print(f"Using {NUM_OF_GPUS} GPUs!")
-    reward_model = nn.DataParallel(reward_model)
-reward_model.to(device)
-print('Model loaded.')
-"""
 
 def extract_anthropic_prompt(prompt_and_response):
     """Extract the anthropic prompt from a prompt and response pair."""
@@ -105,46 +88,6 @@ def get_se(split, silent=False, cache_dir: str = None) -> Dict[str, Dict[str, Un
 
     return data
 
-def get_se_best_of_n(split, silent=False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    """Load the StackExchange dataset from Huggingface, and return a dict of prompts and responses. See get_hh for the format.
-    
-       We strip the HTML tags from the responses (except for <code> tags), and we add necessary newlines.
-    """
-    print(f'Loading SE best-of-n dataset ({split} split) from Huggingface...')
-    #dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences', cache_dir=cache_dir)['train']
-    dataset = load_from_disk("/net/projects/veitch/llm_alignment/data/best_of_small")
-    print('done')
-     
-
-    # shuffle the dataset and select 1% for test
-    dataset = dataset.shuffle(seed=42)
-    dataset = dataset.select(range(int(len(dataset) * 0.01))) if split == 'test' else dataset.select(
-        range(int(len(dataset) * 0.01), len(dataset)))
-
-    def strip_html(x):
-        x['question'] = strip_html_tags(x['question'])
-        for a in x['answers']:
-            a['text'] = strip_html_tags(a['text'])
-        return x
-
-    dataset = dataset.map(strip_html, num_proc=64)
-
-    data = defaultdict(dict)
-    for row in tqdm.tqdm(dataset, desc='Processing SE', disable=silent):
-        prompt = '\n\nHuman: ' + row['question'] + '\n\nAssistant:'
-        responses = [' ' + a['text'] for a in row['answers']]
-        scores = [a['pm_score'] for a in row['answers']]
-
-        pairs = []
-        for i in range(len(responses)):
-            for j in range(i + 1, len(responses)):
-                pairs.append((i, j) if scores[i] > scores[j] else (j, i))
-
-        data[prompt]['responses'] = responses
-        data[prompt]['pairs'] = pairs
-        data[prompt]['sft_target'] = max(responses, key=lambda x: scores[responses.index(x)])
-
-    return data
 
 def get_shp(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     """Load the Stanford Human Preferences dataset from Huggingface and convert it to the necessary format. See hh for the format.
@@ -202,8 +145,6 @@ def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str,
        
        For this dataset, the sft_target is just the chosen response.
     """
-
-    """
     print(f'Loading HH dataset ({split} split) from Huggingface...')
     dataset = datasets.load_dataset('Anthropic/hh-rlhf', split=split, cache_dir=cache_dir)
     print('done')
@@ -215,117 +156,21 @@ def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str,
         return prompt, chosen_response, rejected_response
 
     data = defaultdict(lambda: defaultdict(list))
-    total = 0
-    flipped = 0
     for row in tqdm.tqdm(dataset, desc='Processing HH', disable=silent):
         prompt, chosen, rejected = split_prompt_and_responses(row)
-
-        ## Compute chosen and rejected scores according to the reward model ##
-        chosen_tokenized = reward_tokenizer(prompt, chosen, return_tensors='pt')
-        score_chosen = reward_model(**chosen_tokenized).logits[0].cpu().detach()
-
-        rejected_tokenized = reward_tokenizer(prompt, rejected, return_tensors='pt')
-        score_rejected = reward_model(**rejected_tokenized).logits[0].cpu().detach()
-
         responses = [chosen, rejected]
-
-        if score_rejected.item() > score_chosen.item():
-            responses = [rejected, chosen]
-            flipped += 1
-        total += 1
-
         n_responses = len(data[prompt]['responses'])
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
         data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
 
-    print("Flipped:", flipped, "Total:", total, "Percentage flipped: ", flipped/total* 100)
-    return data
-    """
-
-    ### Load data ranked according to the reward model ###
-    print(f'Loading HH dataset ({split} split) from pickle...')
-    if split == "train":
-        with open('/net/projects/veitch/llm_alignment/data/HH/ranked_HH_data/HH_train_data.pickle', 'rb') as handle:
-            data = dill.load(handle)
-    elif split == "test":
-        with open('/net/projects/veitch/llm_alignment/data/HH/ranked_HH_data/HH_test_data.pickle', 'rb') as handle:
-            data = dill.load(handle)
-
-    return data
-
-def get_tldr_dataset(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    """Load the TLDR dataset  and convert it to the necessary format.
-
-    The dataset is converted to a dictionary with the following structure:
-       {
-           'prompt1': {
-               'responses': List[str],
-               'pairs': List[Tuple[int, int]],
-               'sft_target': str
-           },
-           'prompt2': {
-               ...
-           },
-       }
-
-    """
-
-    
-    print(f'Loading TLDR dataset')
-
-    
-    #f = open('/net/projects/veitch/llm_alignment/data/TLDR/tldr_summarization_data_ranked_sft_response.jsonl', 'r')
-    f = open('/net/projects/veitch/llm_alignment/data/TLDR/tldr_summarization_data_ranked_sft_response_ranker_scores_chosen_rejected.jsonl', 'r')
-    dataset = f.readlines()
-    f.close()
-
-    data = defaultdict(lambda: defaultdict(list))
-    for row in tqdm.tqdm(dataset, desc='Processing TLDR', disable=False):
-        js = json.loads(row)
-        prompt = js[0]
-        content = js[1]
-        
-        pairs = content["pairs"]
-        responses = content["responses"]
-        sft_target = content["sft_target"]
-
-        prompt_pairs = [tuple(pair) for pair in pairs]
-        
-        data[prompt]['pairs'].extend(prompt_pairs)
-        data[prompt]['responses'].extend(responses)
-        data[prompt]['sft_target'] = sft_target
-    
-    
-    """
-    ## BEST AND WORST 
-    print(f'Loading TLDR best/worst dataset')
-    f = open('/net/projects/veitch/llm_alignment/data/TLDR/best-of-tldr/ipo_training/actual_bw_8_temperature_0_8.jsonl', 'r')
-
-    ## BEST AND MEDIAN
-    #print(f'Loading best and median dataset temp 0.8')
-    #f = open('/net/projects/veitch/llm_alignment/data/HH/ipo_training_data/actual_bm_8_temperature_0_8.jsonl', 'r')
-
-    dataset = f.readlines()
-    f.close()
-
-    data = defaultdict(lambda: defaultdict(list))
-    for row in tqdm.tqdm(dataset, desc='Processing TLDR best/worst', disable=silent):
-        js = json.loads(row)
-        prompt = list(js.keys())[0]
-        prompt_pairs = [tuple(pair) for pair in js[prompt]["pairs"]]
-        data[prompt]['pairs'].extend(prompt_pairs)
-        data[prompt]['responses'].extend(js[prompt]["responses"])
-        data[prompt]['sft_target'] = js[prompt]["sft_target"]
-    
-    """
     return data
 
 
-def get_hh_subset(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    """Load the Anthropic Helpful-Harmless dataset from Huggingface and convert it to the necessary format.
+def get_best_worst(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+    """Load the best-worst data and convert it to the necessary format.
     
-       The dataset is converted to a dictionary with the following structure:
+       The data is converted to a dictionary with the following structure:
        {
            'prompt1': {
                'responses': List[str],
@@ -341,55 +186,25 @@ def get_hh_subset(split: str, silent: bool = False, cache_dir: str = None) -> Di
          \n\nHuman: <prompt>\n\nAssistant:
        Multiple turns are allowed, but the prompt should always start with \n\nHuman: and end with \n\nAssistant:.
        
-       For this dataset, the sft_target is just the chosen response.
+       The sft_target is the chosen response.
     """
-    #print(f'Loading HH dataset ({split} split) from Huggingface...')
-    #dataset = datasets.load_dataset('Anthropic/hh-rlhf', split=split, cache_dir=cache_dir)
-    #dataset = datasets.load_dataset("csv", data_files="/net/projects/veitch/llm_alignment/data/hh_subset.csv")
     
-    """
-    ## BASELINE RUNS
-    dataset=load_from_disk('/net/projects/veitch/llm_alignment/data/hh_subset')
-
-    def split_prompt_and_responses(ex):
-        prompt = extract_anthropic_prompt(ex['chosen'])
-        chosen_response = ex['chosen'][len(prompt):]
-        rejected_response = ex['rejected'][len(prompt):]
-        return prompt, chosen_response, rejected_response
-
-    data = defaultdict(lambda: defaultdict(list))
-    for row in tqdm.tqdm(dataset, desc='Processing HH', disable=silent):
-        print("row", row)
-        prompt, chosen, rejected = split_prompt_and_responses(row)
-        responses = [chosen, rejected]
-        n_responses = len(data[prompt]['responses'])
-        data[prompt]['pairs'].append((n_responses, n_responses + 1))
-        data[prompt]['responses'].extend(responses)
-        data[prompt]['sft_target'] = chosen
-    return data
-    
-    """
-
     
     ## BEST AND WORST 
-    print(f'Loading best and worst dataset temp 0.8')
-    f = open('/net/projects/veitch/llm_alignment/data/HH/ipo_training_data/actual_bw_8_temperature_0_8.jsonl', 'r')
-
-    ## BEST AND MEDIAN
-    #print(f'Loading best and median dataset temp 0.8')
-    #f = open('/net/projects/veitch/llm_alignment/data/HH/ipo_training_data/actual_bm_8_temperature_0_8.jsonl', 'r')
-
+    print(f'Loading best and worst data')
+    f = open('/path/to/best_worst_data.jsonl', 'r')
     dataset = f.readlines()
     f.close()
 
     data = defaultdict(lambda: defaultdict(list))
-    for row in tqdm.tqdm(dataset, desc='Processing HH', disable=silent):
+    for row in tqdm.tqdm(dataset, desc='Processing best worst data', disable=silent):
         js = json.loads(row)
         prompt = list(js.keys())[0]
-        data[prompt]['pairs'].extend(tuple(js[prompt]["pairs"][0]))
+        prompt_pairs = [tuple(pair) for pair in js[prompt]["pairs"]]
+        data[prompt]['pairs'].extend(prompt_pairs)
         data[prompt]['responses'].extend(js[prompt]["responses"])
         data[prompt]['sft_target'] = js[prompt]["sft_target"]
-    
+
     return data
 
 
@@ -399,10 +214,8 @@ def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = No
         data = get_shp(split, silent=silent, cache_dir=cache_dir)
     elif name == 'hh':
         data = get_hh(split, silent=silent, cache_dir=cache_dir)
-    elif name == 'hh_subset':
-        data = get_hh_subset(split, silent=silent, cache_dir=cache_dir)
-    elif name == 'tldr':
-        data = get_tldr_dataset(split, silent=silent, cache_dir=cache_dir)
+    elif name == 'best_worst':
+        data = get_best_worst(split, silent=silent, cache_dir=cache_dir)
     elif name == 'se':
         data = get_se(split, silent=silent, cache_dir=cache_dir)
     else:
