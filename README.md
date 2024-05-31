@@ -75,9 +75,6 @@ python -u train.py model=pythia28 datasets=[hh_subset] loss=combined loss.beta=0
 
 We run each model for 20k steps, then sample and evaluate from the trained model.
 
-## Sampling from trained checkpoint
-
-
 ## Evaluations
 
 See [kl_from_samples.py](https://github.com/gl-ybnbxb/BoNBoN/blob/main/metrics/kl_from_samples.py) and [eval_reward_model.py](https://github.com/gl-ybnbxb/BoNBoN/blob/main/metrics/eval_reward_model.py) for KL divergence and win rate computations.
