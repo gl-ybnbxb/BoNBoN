@@ -52,7 +52,9 @@ Run SFT for Pythia 2.8B on Anthropic-HH data with batch size 64:
 python -u train.py model=pythia28 datasets=[hh] loss=sft exp_name=sft_pythia28_AntrophicHH gradient_accumulation_steps=2 batch_size=64 eval_batch_size=32 trainer=FSDPTrainer sample_during_eval=false model.fsdp_policy_mp=bfloat16
 ```
 
-Step 2: Running DPO / IPO / BoNBoN
+Step 2: Build your own best-and-worst training data
+
+Step 3: Running DPO / IPO / BoNBoN
 
 There are three types of losses implemented: `dpo`, `ipo`, and `bonbon` loss.
 
